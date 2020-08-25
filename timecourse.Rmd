@@ -76,7 +76,7 @@ x <- Tx2Gene(x)
 
 Here, I'm running an MDS plot to see the overall variation in the expression data.
 
-```{r,mds}
+```{r,mds,fig.width = 8 ,fig.height = 8,}
 samplegroups <- factor(sapply(strsplit(md$Library_name,"_"),"[[",1))
 
 colour_palette <- brewer.pal(n = length(levels(samplegroups)), name = "Paired")
@@ -132,7 +132,7 @@ dds <- DESeq(dds)
 de <- DESeq2::results(dds)
 de0 <- as.data.frame(de[order(de$pvalue),])
 head(de0,20)
-
+write.table(de0,"h_vs_80_0hpi.tsv",sep="\t",quote=FALSE)
 
 # t=3
 dds <- DESeqDataSetFromMatrix(countData=x3, colData = ss3, design = ~ trt)
@@ -140,6 +140,7 @@ dds <- DESeq(dds)
 de <- DESeq2::results(dds)
 de3 <- as.data.frame(de[order(de$pvalue),])
 head(de3,20)
+write.table(de3,"h_vs_80_3hpi.tsv",sep="\t",quote=FALSE)
 
 # t=6
 dds <- DESeqDataSetFromMatrix(countData=x6, colData = ss6, design = ~ trt)
@@ -147,6 +148,7 @@ dds <- DESeq(dds)
 de <- DESeq2::results(dds)
 de6 <- as.data.frame(de[order(de$pvalue),])
 head(de6,20)
+write.table(de6,"h_vs_80_6hpi.tsv",sep="\t",quote=FALSE)
 
 # t=12
 dds <- DESeqDataSetFromMatrix(countData=x12, colData = ss12, design = ~ trt)
@@ -154,6 +156,7 @@ dds <- DESeq(dds)
 de <- DESeq2::results(dds)
 de12 <- as.data.frame(de[order(de$pvalue),])
 head(de12,20)
+write.table(de12,"h_vs_80_12hpi.tsv",sep="\t",quote=FALSE)
 
 # t=24
 dds <- DESeqDataSetFromMatrix(countData=x24, colData = ss24, design = ~ trt)
@@ -161,12 +164,13 @@ dds <- DESeq(dds)
 de <- DESeq2::results(dds)
 de24 <- as.data.frame(de[order(de$pvalue),])
 head(de24,20)
+write.table(de24,"h_vs_80_24hpi.tsv",sep="\t",quote=FALSE)
 
 ```
 
 Now run an MDS plot to visualise the gene expression differences at each timepoint.
 
-```{r, maplot}
+```{r, maplot,fig.width = 8 ,fig.height = 8}
 
 maplot <- function(de,contrast_name) {
   sig <-subset(de, padj < 0.05 )
@@ -195,7 +199,7 @@ maplot(de24, contrast_name = "24hpi")
 
 ## Enrichment analysis
 
-```{r, mitch}
+```{r, mitch, fig.width = 8 ,fig.height = 8}
 gsets <- gmt_import("Ath_AGI_LOCUS_TAIR10_Aug2012.txt.gmt")
 
 xl <- list("de0"=de0,"de3"=de3,"de6"=de6,"de12"=de12,"de24"=de24)
@@ -208,7 +212,12 @@ capture.output(
     , file = "/dev/null", append = FALSE,
     type = c("output", "message"), split = FALSE)
 
-head(res$enrichment_result,20)
+n=50
+head(res$enrichment_result,n)
+z <- res$enrichment_result[1:n,4:8]
+rownames(z) <- head(res$enrichment_result$set,n)
+colnames(z) <- gsub("s.","",colnames(z))
+heatmap.2(as.matrix(z),margins = c(5,28),cexRow = 0.5, trace="none", main="multidimensional enrichment analysis")
 
 capture.output(
     mitch_plots(res,"timecourse_mitch_eff_plots.pdf")
