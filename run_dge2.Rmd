@@ -1,0 +1,315 @@
+---
+title: "Tohidul effect of Seasol on baseline gene expression"
+author: "Mark Ziemann"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+theme: cosmo
+---
+
+Source codes: https://github.com/markziemann/tohidul_rnaseq
+
+## Background
+
+Here we have four groups:
+
+1. AN-0 (code 93)
+
+2. DP-0 (code 94)
+
+3. AN/DP-0 (code 80)
+
+4. CTRL (H-0)
+
+The comparisons that I'm interested in are
+
+1. DE1: CTRL vs AN/DP
+
+2. DE2: CTRL vs AN
+
+3. DE3: CTRL vs DP
+
+The data is available from NCBI SRA with accession number SRP253869.
+
+Here I will download the dataset from the DEE2 webpage (http://dee2.io).
+
+SRR11404313     PASS    SRX7982984      SRS6367539      SRP253869       H-0hpi_R1
+
+SRR11404312     PASS    SRX7982985      SRS6367540      SRP253869       H-0hpi_R2
+
+SRR11404301     PASS    SRX7982996      SRS6367551      SRP253869       H-0hpi_R3
+
+SRR11404273     PASS    SRX7983024      SRS6367579      SRP253869       S80-0hpi_R1
+
+SRR11404272     PASS    SRX7983025      SRS6367580      SRP253869       S80-0hpi_R2
+
+SRR11404271     PASS    SRX7983026      SRS6367581      SRP253869       S80-0hpi_R3
+
+SRR11404306     PASS    SRX7982991      SRS6367549      SRP253869       S93-0hpi_R1
+
+SRR11404305     PASS    SRX7982992      SRS6367550      SRP253869       S93-0hpi_R2
+
+SRR11404304     PASS    SRX7982993      SRS6367559      SRP253869       S93-0hpi_R3
+
+SRR11404289     PASS    SRX7983008      SRS6367566      SRP253869       S94-0hpi_R1
+
+SRR11404288     PASS    SRX7983009      SRS6367575      SRP253869       S94-0hpi_R2
+
+SRR11404287     PASS    SRX7983010      SRS6367576      SRP253869       S94-0hpi_R3
+
+Then I will perform differential analysis with DESeq2 (Love et al, 2014).
+Pathway analysis was then performed with mitch (Kaspi & Ziemann 2020).
+
+```{r,pkg}
+
+suppressPackageStartupMessages({
+    library("getDEE2")
+    library("gplots")
+    library("DESeq2")
+    library("mitch")
+})
+
+```
+
+## Load data
+
+Here we load the data in from DEE2. 
+We use the Kallisto transcript quantifications and summarise these to gene level.
+
+```{r,import}
+
+samplesheet <- read.table("samplesheet.tsv",header=TRUE)
+samplesheet$ctrl <- grepl("H-0",samplesheet$LABEL)*1
+samplesheet$andp <- grepl("S80",samplesheet$LABEL)*1
+samplesheet$an <- grepl("S93",samplesheet$LABEL)*1
+samplesheet$dp <- grepl("S94",samplesheet$LABEL)*1
+rownames(samplesheet) <- samplesheet$LABEL
+samplesheet <- samplesheet[order(samplesheet$SRR),]
+
+SRRvec <- samplesheet$SRR
+x <- getDEE2(species="athaliana",SRRvec=SRRvec,legacy=TRUE)
+x <- Tx2Gene(x)
+head(x$Tx2Gene)
+y <- x$Tx2Gene
+colnames(y) <- x$MetadataSummary$Sample_name
+
+# Annotation from ensembl biomart with gene description
+# cut -f-3  mart_export.txt | sed 1d | sort -u > mart_export_f.txt 
+ann <- read.table("mart_export_f.txt",header=FALSE, sep="\t",fill=TRUE, row.names=1) 
+
+```
+
+## MDS
+
+MDS is just like PCA.
+The more similar (correlated) the data sets are the closer they will appear on the scatterplot.
+
+```{r,mds,fig.height=8,fig.width=8}
+
+plot(cmdscale(dist(t(y))), xlab="Coordinate 1", ylab="Coordinate 2", 
+  type = "n" , main="MDS plot")
+text(cmdscale(dist(t(y))), labels=colnames(y) )
+
+#yr <- apply(y,2,rank) 
+#plot(cmdscale(dist(t(yr))), xlab="Coordinate 1", ylab="Coordinate 2",
+#  type = "n" , main="MDS plot")
+#text(cmdscale(dist(t(yr))), labels=colnames(yr) )
+
+par(mar=c(5,10,5,3))
+barplot(colSums(y),horiz=TRUE,las=2,main="number of reads per sample",cex.names=0.5)
+
+colfunc <- colorRampPalette(c("white", "yellow","orange","red", "darkred"))
+# Dataset level correlation
+heatmap.2(cor(y,method="s"),trace="none",margin=c(10,10),scale="none",col=colfunc,
+cexRow=0.8,cexCol=0.8,main="Spearman correlation heatmap")
+
+```
+
+## Functions
+
+```{r,defunc,fig.height=8,fig.width=8}
+
+run_de <- function(ss,xx){
+xx <- xx[which(rowMeans(xx)>10),]
+y <- round(xx)
+# MDS
+mds <- cmdscale(dist(t(y)))
+XMAX=max(mds[,1])*1.1
+XMIN=min(mds[,1])*1.1
+plot( mds , xlab="Coordinate 1", ylab="Coordinate 2",
+  type = "n" , xlim=c(XMIN,XMAX),main="MDS plot",bty="n")
+text(mds, labels=colnames(y) )
+# DE
+dds <- DESeqDataSetFromMatrix(countData=y, colData = ss, design = ~ trt)
+dds <- DESeq(dds)
+de <- DESeq2::results(dds)
+de <- de[order(de$pvalue),]
+up <- rownames(subset(de, log2FoldChange>0 & padj<0.05 ))
+dn <- rownames(subset(de, log2FoldChange<0 & padj<0.05 ))
+str(up)
+str(dn)
+# MA plot
+sig <-subset(de, padj < 0.05 )
+GENESUP <- length(up)
+GENESDN <- length(dn)
+SUBHEADER = paste(GENESUP, "up, ", GENESDN, "down")
+ns <-subset(de, padj > 0.05 )
+plot(log2(de$baseMean),de$log2FoldChange,
+     xlab="log2 basemean", ylab="log2 foldchange",
+     pch=19, cex=0.5, col="dark gray",
+     main="smear plot")
+points(log2(sig$baseMean),sig$log2FoldChange,
+       pch=19, cex=0.5, col="red")
+mtext(SUBHEADER)
+# heatmap
+yn <- y/colSums(y)*1000000
+yf <- yn[which(rownames(yn) %in% rownames(de)[1:50]),]
+mycols <- gsub("0","yellow",ss$trt)
+mycols <- gsub("1","orange",mycols)
+colfunc <- colorRampPalette(c("blue", "white", "red"))
+heatmap.2(  as.matrix(yf), col=colfunc(25),scale="row",
+    ColSideColors =mycols ,trace="none",
+    margin = c(10,10), cexRow=0.6, cexCol=0.8 , main="Top 50 genes by p-val")
+mtext("yellow=ctrl, orange=trt")
+return(de)
+}
+
+
+mitch_barplot <- function(res){
+  sig <- res$enrichment_result
+  sig <- head( sig[order(sig$pANOVA),] ,30)
+  sig <- sig[order(sig$s.dist),]
+  par(mar=c(3,25,1,1)); barplot(sig$s.dist,horiz=TRUE,las=2,cex.names = 0.6,cex.axis = 0.6,
+    names.arg=sig$set,main="Enrichment score") ;grid()
+}
+
+```
+
+## Define contrasts
+
+```{r,define1,fig.height=8,fig.width=8}
+
+ss1 <- subset(samplesheet,ctrl==1|andp==1)
+ss1$trt <- ss1$andp
+y1 <- y[,which(colnames(y) %in% rownames(ss1))] 
+
+ss2 <- subset(samplesheet,ctrl==1|an==1)
+ss2$trt <- ss2$an
+y2 <- y[,which(colnames(y) %in% rownames(ss2))]
+
+ss3 <- subset(samplesheet,ctrl==1|dp==1)
+ss3$trt <- ss3$dp
+y3 <- y[,which(colnames(y) %in% rownames(ss3))]
+
+```
+
+## Differential analysis
+
+```{r,de,fig.height=8,fig.width=8}
+
+ss1
+de1 <- run_de(ss1,y1)
+dea1 <- merge(ann,as.data.frame(de1),by=0) 
+dea1 <- dea1[order(dea1$pvalue),] 
+head(dea1)
+write.table(dea1,file="de1.tsv",quote=FALSE,sep="\t")
+
+ss2
+de2 <- run_de(ss2,y2)
+dea2 <- merge(ann,as.data.frame(de2),by=0) 
+dea2 <- dea2[order(dea2$pvalue),] 
+head(dea2)
+write.table(dea2,file="de2.tsv",quote=FALSE,sep="\t")
+
+ss3
+de3 <- run_de(ss3,y3)
+dea3 <- merge(ann,as.data.frame(de3),by=0)
+dea3 <- dea3[order(dea3$pvalue),]
+head(dea3)
+write.table(dea3,file="de3.tsv",quote=FALSE,sep="\t")
+
+```
+
+## Pathway analysis
+
+First using plant Reactome downloaded 8th July 2020.
+
+```{r,reactome,fig.height=8,fig.width=8} 
+
+genesets <- gmt_import("plant_reactome.gmt")
+
+m1 <- mitch_import(x=data.frame(de1),DEtype="deseq2")
+res1 <- mitch_calc(x=m1,genesets=genesets,priority="effect")
+mitch_barplot(res1)
+head(res1$enrichment_result,20)
+
+m2 <- mitch_import(x=data.frame(de2),DEtype="deseq2")
+res2 <- mitch_calc(x=m2,genesets=genesets,priority="effect")
+mitch_barplot(res2)
+head(res2$enrichment_result,20)
+
+m3 <- mitch_import(x=data.frame(de3),DEtype="deseq2")
+res3 <- mitch_calc(x=m3,genesets=genesets,priority="effect")
+mitch_barplot(res3)
+head(res3$enrichment_result,20)
+
+# Multi-contrast mitch.
+#x <- list("de1"=de1,"de2"=de2,"de3"=de2)
+#xx <- mitch_import(x=x,DEtype="deseq2")
+#res <- mitch_calc(x=xx,genesets=genesets,priority="effect",cores=1)
+#head(res$enrichment_result,20)
+
+```
+
+Next with mapman pathways last modified in 2012 and used in the previous RNA-seq analysis.
+
+```{r,mapman,fig.height=8,fig.width=8}
+
+genesets <- gmt_import("../ref/Ath_AGI_LOCUS_TAIR10_Aug2012.txt.gmt")
+gt <- read.table("../ref/Arabidopsis_thaliana.TAIR10.46.geneaccession2symbol.tsv",
+    fill=TRUE) 
+
+m1 <- mitch_import(x=data.frame(de1),DEtype="deseq2",geneTable=gt)
+res1 <- mitch_calc(x=m1,genesets=genesets,priority="effect")
+mitch_barplot(res1)
+head(res1$enrichment_result,20)
+
+m2 <- mitch_import(x=data.frame(de2),DEtype="deseq2",geneTable=gt)
+res2 <- mitch_calc(x=m2,genesets=genesets,priority="effect")
+mitch_barplot(res2)
+head(res2$enrichment_result,20)
+
+m3 <- mitch_import(x=data.frame(de3),DEtype="deseq2",geneTable=gt)
+res3 <- mitch_calc(x=m3,genesets=genesets,priority="effect")
+mitch_barplot(res3)
+head(res3$enrichment_result,20)
+
+# Multi-contrast mitch.
+#x <- list("de1"=de1,"de2"=de2,"de3"=de2)
+#xx <- mitch_import(x=x,DEtype="deseq2")
+#res <- mitch_calc(x=xx,genesets=genesets,priority="effect",cores=1)
+#head(res$enrichment_result,20)
+
+```
+
+## Session information
+
+So you know what version of R and packages was used.
+
+```{r,session}
+
+sessionInfo()
+
+```
+
+## References
+
+Bray NL, Pimentel H, Melsted P, Pachter L. Near-optimal probabilistic RNA-seq quantification [published correction appears in Nat Biotechnol. 2016 Aug 9;34(8):888]. Nat Biotechnol. 2016;34(5):525-527. doi:10.1038/nbt.3519
+
+Jiang H, Lei R, Ding SW, Zhu S. Skewer: a fast and accurate adapter trimmer for next-generation sequencing paired-end reads. BMC Bioinformatics. 2014;15:182. Published 2014 Jun 12. doi:10.1186/1471-2105-15-182
+
+Love MI, Huber W, Anders S. Moderated estimation of fold change and dispersion for RNA-seq data with DESeq2. Genome Biol. 2014;15(12):550. doi:10.1186/s13059-014-0550-8
+
+Kaspi A, Ziemann M. mitch: multi-contrast pathway enrichment for multi-omics and single-cell profiling data. BMC Genomics. 2020;21(1):447. Published 2020 Jun 29. doi:10.1186/s12864-020-06856-9
+
