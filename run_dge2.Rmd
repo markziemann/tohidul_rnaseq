@@ -124,6 +124,10 @@ colfunc <- colorRampPalette(c("white", "yellow","orange","red", "darkred"))
 heatmap.2(cor(y,method="s"),trace="none",margin=c(10,10),scale="none",col=colfunc,
 cexRow=0.8,cexCol=0.8,main="Spearman correlation heatmap")
 
+# restore defaults
+par(mar=c(5.1,4.1,4.1,2.1))
+
+
 ```
 
 ## Functions
@@ -210,21 +214,21 @@ y3 <- y[,which(colnames(y) %in% rownames(ss3))]
 
 ss1
 de1 <- run_de(ss1,y1)
-dea1 <- merge(ann,as.data.frame(de1),by=0) 
+dea1 <- merge(ann,as.data.frame(de1),by=0, all.y=TRUE) 
 dea1 <- dea1[order(dea1$pvalue),] 
 head(dea1)
 write.table(dea1,file="de1.tsv",quote=FALSE,sep="\t")
 
 ss2
 de2 <- run_de(ss2,y2)
-dea2 <- merge(ann,as.data.frame(de2),by=0) 
+dea2 <- merge(ann,as.data.frame(de2),by=0, all.y=TRUE) 
 dea2 <- dea2[order(dea2$pvalue),] 
 head(dea2)
 write.table(dea2,file="de2.tsv",quote=FALSE,sep="\t")
 
 ss3
 de3 <- run_de(ss3,y3)
-dea3 <- merge(ann,as.data.frame(de3),by=0)
+dea3 <- merge(ann,as.data.frame(de3),by=0, all.y=TRUE)
 dea3 <- dea3[order(dea3$pvalue),]
 head(dea3)
 write.table(dea3,file="de3.tsv",quote=FALSE,sep="\t")
