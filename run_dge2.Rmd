@@ -68,6 +68,7 @@ suppressPackageStartupMessages({
     library("gplots")
     library("DESeq2")
     library("mitch")
+    library(biomaRt) 
 })
 
 ```
@@ -96,7 +97,15 @@ colnames(y) <- x$MetadataSummary$Sample_name
 
 # Annotation from ensembl biomart with gene description
 # cut -f-3  mart_export.txt | sed 1d | sort -u > mart_export_f.txt 
-ann <- read.table("mart_export_f.txt",header=FALSE, sep="\t",fill=TRUE, row.names=1) 
+#ann <- read.table("mart_export_f.txt",header=FALSE, sep="\t",fill=TRUE, row.names=1) 
+
+ensembl_arabidopsis <- useEnsemblGenomes(biomart = "plants_mart", dataset = "athaliana_eg_gene")
+attributes = listAttributes(ensembl_arabidopsis)
+#[1] "Gene stable ID"   "Gene name"        "Gene description"
+myattr <- attributes[c(1,15,5),1]
+myann <- getBM(attributes = myattr,  mart = ensembl_arabidopsis)
+colnames(myann) <- c("GeneID","GeneName","GeneDescription")
+head(myann)
 
 ```
 
@@ -214,21 +223,21 @@ y3 <- y[,which(colnames(y) %in% rownames(ss3))]
 
 ss1
 de1 <- run_de(ss1,y1)
-dea1 <- merge(ann,as.data.frame(de1),by=0, all.y=TRUE) 
+dea1 <- merge(myann,as.data.frame(de1),by.x="GeneID",by.y=0, all.y=TRUE)
 dea1 <- dea1[order(dea1$pvalue),] 
 head(dea1)
 write.table(dea1,file="de1.tsv",quote=FALSE,sep="\t")
 
 ss2
 de2 <- run_de(ss2,y2)
-dea2 <- merge(ann,as.data.frame(de2),by=0, all.y=TRUE) 
+dea2 <- merge(myann,as.data.frame(de2),by.x="GeneID",by.y=0, all.y=TRUE)
 dea2 <- dea2[order(dea2$pvalue),] 
 head(dea2)
 write.table(dea2,file="de2.tsv",quote=FALSE,sep="\t")
 
 ss3
 de3 <- run_de(ss3,y3)
-dea3 <- merge(ann,as.data.frame(de3),by=0, all.y=TRUE)
+dea3 <- merge(myann,as.data.frame(de3),by.x="GeneID",by.y=0, all.y=TRUE)
 dea3 <- dea3[order(dea3$pvalue),]
 head(dea3)
 write.table(dea3,file="de3.tsv",quote=FALSE,sep="\t")
@@ -247,16 +256,22 @@ m1 <- mitch_import(x=data.frame(de1),DEtype="deseq2")
 res1 <- mitch_calc(x=m1,genesets=genesets,priority="effect")
 mitch_barplot(res1)
 head(res1$enrichment_result,20)
+unlink("reactome_de1.html")
+mitch_report(res1, "reactome_de1.html")
 
 m2 <- mitch_import(x=data.frame(de2),DEtype="deseq2")
 res2 <- mitch_calc(x=m2,genesets=genesets,priority="effect")
 mitch_barplot(res2)
 head(res2$enrichment_result,20)
+unlink("reactome_de2.html")
+mitch_report(res2, "reactome_de2.html")
 
 m3 <- mitch_import(x=data.frame(de3),DEtype="deseq2")
 res3 <- mitch_calc(x=m3,genesets=genesets,priority="effect")
 mitch_barplot(res3)
 head(res3$enrichment_result,20)
+unlink("reactome_de3.html")
+mitch_report(res3, "reactome_de3.html")
 
 # Multi-contrast mitch.
 #x <- list("de1"=de1,"de2"=de2,"de3"=de2)
@@ -278,16 +293,23 @@ m1 <- mitch_import(x=data.frame(de1),DEtype="deseq2",geneTable=gt)
 res1 <- mitch_calc(x=m1,genesets=genesets,priority="effect")
 mitch_barplot(res1)
 head(res1$enrichment_result,20)
+unlink("mitch_de1.html")
+mitch_report(res1, "mitch_de1.html")
 
 m2 <- mitch_import(x=data.frame(de2),DEtype="deseq2",geneTable=gt)
 res2 <- mitch_calc(x=m2,genesets=genesets,priority="effect")
 mitch_barplot(res2)
 head(res2$enrichment_result,20)
+unlink("mitch_de2.html")
+mitch_report(res2, "mitch_de2.html")
 
 m3 <- mitch_import(x=data.frame(de3),DEtype="deseq2",geneTable=gt)
 res3 <- mitch_calc(x=m3,genesets=genesets,priority="effect")
 mitch_barplot(res3)
 head(res3$enrichment_result,20)
+unlink("mitch_de3.html")
+mitch_report(res3, "mitch_de3.html")
+
 
 # Multi-contrast mitch.
 #x <- list("de1"=de1,"de2"=de2,"de3"=de2)
