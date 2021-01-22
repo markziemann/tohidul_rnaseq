@@ -1,0 +1,156 @@
+---
+title: "Investigating whether Season responsive genes are linked to abiotic stress"
+author: "Mark Ziemann"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+theme: cosmo
+---
+
+Source codes: https://github.com/markziemann/tohidul_rnaseq
+
+## Background
+
+Generate a heatmap of expression:
+
+* Genes from 0 hr AN/DP vs Water  (h2o vs 80 de) fold change of =>1.5 and padj value <0.05.
+
+* Expression data mined from eFP browser here:
+http://bar.utoronto.ca/affydb/cgi-bin/affy_db_exprss_browser_in.cgi?pub=&dataset=atgenexp_stress
+
+```{r,pkg}
+
+suppressPackageStartupMessages({
+    library("gplots")
+})
+
+```
+
+## Load data
+
+Here we load the data produced by earlier analysis 
+We use the Kallisto transcript quantifications and summarise these to gene level.
+
+```{r,import}
+
+de1 <- read.table("de1.tsv",header=TRUE,row.names=1,sep="\t",fill=TRUE)
+de1_up <- subset(de1,log2FoldChange>1.5 & padj < 0.05)$GeneID
+writeLines(de1_up,con="de1up.txt")
+
+```
+
+Then I searched in the eFP browser. Here's a list of Genes Not Found in the Database:
+
+At1g07985,
+At1g29100,
+At1g47395,
+At1g53610,
+At1g58320,
+At2g36255,
+At4g11393,
+At4g25433,
+At4g36850,
+At5g46610,
+At5g54165
+
+
+
+```{r,import_efp,fig.height=8,fig.width=8}
+
+# numeric data first
+datfile="exprss_text_unsorted_25077.txt"
+efp <- read.table(datfile, header=TRUE, row.names=1, sep="\t", comment.char="#")
+genenames <- efp[,1,drop=FALSE]
+efp[,1]=NULL
+
+# sample info data next
+dat <- readLines(datfile)
+dat <- dat[grep('#',dat)]
+datlist <- strsplit(dat,"\t")
+sampleinfo <- as.data.frame(do.call(rbind, datlist))
+sampleinfo[1:5,1:6]
+sampleinfo$V2=NULL
+rownames(sampleinfo) <- gsub("#","",sampleinfo$V1)
+sampleinfo$V1=NULL
+sampleinfo <- as.data.frame(t(sampleinfo))
+str(sampleinfo)
+
+```
+
+## Filtering
+
+```{r,filtering,fig.height=8,fig.width=8}
+
+cols <- which(
+  sampleinfo$timecourse =="1.0 h" &
+  sampleinfo$control =="No" &
+  sampleinfo$tissue =="Shoot" &
+  sampleinfo$age =="1.02" )
+
+shoot <- efp[,cols]
+
+shootsampleinfo <- sampleinfo[cols,]
+shootsampleinfo
+
+colnames(shoot) <- gsub(" Stress","",shootsampleinfo$category)
+
+
+cols <- which(
+  sampleinfo$timecourse =="1.0 h" &
+  sampleinfo$control =="No" &
+  sampleinfo$tissue =="Root" &
+  sampleinfo$age =="1.02" )
+
+
+root <- efp[,cols]
+
+rootsampleinfo <- sampleinfo[cols,]
+rootsampleinfo
+
+colnames(root) <- gsub(" Stress","",rootsampleinfo$category)
+
+```
+
+## Heatmap
+
+```{r,heat1,fig.height=8,fig.width=8}
+
+#colour palette
+colfunc <- colorRampPalette(c("blue", "white", "red"))
+
+# shoot
+heatmap.2( as.matrix(shoot), col=colfunc(25),scale="row",
+trace="none",margins = c(6,20), cexRow=.6, cexCol=.8,  main="Shoot")
+
+# with proper names
+shoot2 <- shoot
+rownames(shoot2) <- paste(rownames(genenames),genenames$NAME)
+heatmap.2( as.matrix(shoot2), col=colfunc(25),scale="row",
+trace="none",margins = c(6,25), cexRow=.6, cexCol=.8,  main="Shoot")
+
+# root
+heatmap.2( as.matrix(root), col=colfunc(25),scale="row",
+trace="none",margins = c(6,20), cexRow=.6, cexCol=.8,  main="Root")
+
+# with proper names
+root2 <- root
+rownames(root2) <- paste(rownames(genenames),genenames$NAME)
+heatmap.2( as.matrix(root2), col=colfunc(25),scale="row",
+trace="none",margins = c(6,25), cexRow=.6, cexCol=.8,  main="Root")
+
+
+
+```
+
+## Session information
+
+So you know what version of R and packages was used.
+
+```{r,session}
+
+sessionInfo()
+
+```
+
+
