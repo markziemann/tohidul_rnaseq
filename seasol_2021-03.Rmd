@@ -28,7 +28,7 @@ suppressPackageStartupMessages({
   library("kableExtra")
   library("eulerr")
   library("UpSetR")
-
+  library("vioplot")
 })
 
 ```
@@ -48,7 +48,6 @@ rownames(xx) <- xx$gene
 xx$gene = NULL
 xx <- xx[,order(colnames(xx))]
 write.table(xx,file="seasol_2021-03_genecounts.tsv",sep="\t",quote=FALSE)
-
 
 ```
 
@@ -336,7 +335,7 @@ gt <- read.table("../baseline/ref/Arabidopsis_thaliana.TAIR10.46.geneaccession2s
     fill=TRUE) 
 
 m <- mitch_import(x=as.data.frame(del3), DEtype="deseq2",geneTable=gt)
-del3m <- mitch_calc(x=m,genesets=genesets,priority="effect")
+del3m <- mitch_calc(x=m,genesets=genesets,priority="effect",minsetsize=5)
 mitch_barplot(del3m)
 
 unlink("del3m_mitch.html")
@@ -346,7 +345,7 @@ capture.output(
     type = c("output", "message"), split = FALSE)
 
 m <- mitch_import(x=as.data.frame(del5),DEtype="deseq2",geneTable=gt)
-del5m <- mitch_calc(x=m,genesets=genesets,priority="effect")
+del5m <- mitch_calc(x=m,genesets=genesets,priority="effect",minsetsize=5)
 mitch_barplot(del5m)
 
 unlink("del5m_mitch.html")
@@ -356,7 +355,7 @@ capture.output(
     type = c("output", "message"), split = FALSE)
 
 m <- mitch_import(x=as.data.frame(der3),DEtype="deseq2",geneTable=gt)
-der3m <- mitch_calc(x=m,genesets=genesets,priority="effect")
+der3m <- mitch_calc(x=m,genesets=genesets,priority="effect",minsetsize=5)
 mitch_barplot(der3m)
 
 unlink("der3m_mitch.html")
@@ -366,7 +365,7 @@ capture.output(
     type = c("output", "message"), split = FALSE)
 
 m <- mitch_import(x=as.data.frame(der5),DEtype="deseq2",geneTable=gt)
-der5m <- mitch_calc(x=m,genesets=genesets,priority="effect")
+der5m <- mitch_calc(x=m,genesets=genesets,priority="effect",minsetsize=5)
 mitch_barplot(der5m)
 
 unlink("der5m_mitch.html")
@@ -387,7 +386,7 @@ l <- list("del3"=del3,"del5"=del5,
 m <- mitch_import(x=l,DEtype="deseq2",geneTable=gt)
 
 # effect size
-res <- mitch_calc(x=m,genesets=genesets,priority="effect")
+res <- mitch_calc(x=m,genesets=genesets,priority="effect",minsetsize=5)
 
 top <- subset(res$enrichment_result,p.adjustMANOVA<0.05)
 kbl(head(top,30)) %>% kable_paper("hover", full_width = F)
@@ -404,6 +403,103 @@ unlink("mapman_report_eff.html")
 capture.output(
     mitch_report(res,outfile=paste("mapman_report_eff.html"))
     , file = "/dev/null", append = FALSE,
+    type = c("output", "message"), split = FALSE)
+
+```
+
+## Focus on ROS
+
+DEL3 contrast
+
+```{r,customsets_del3,fig.height=8,fig.width=8}
+
+customsets <- c("MISC_GLUTATHIONE_S_TRANSFERASES",
+  "MISC_PEROXIDASES",
+  "REDOX_DISMUTASES_AND_CATALASES",
+  "REDOX_GLUTAREDOXINS")
+
+customsets <- genesets[which(names(genesets) %in% customsets)]
+
+m <- mitch_import(x=as.data.frame(del3), DEtype="deseq2",geneTable=gt)
+del3m <- mitch_calc(x=m,genesets=customsets,priority="effect",minsetsize=5)
+
+del3m$enrichment_result %>%
+  kbl() %>%
+  kable_paper("hover", full_width = F)
+
+mitch_barplot(del3m)
+vioplot(del3m$detailed_sets,horizontal=TRUE,las=1) ; grid()
+
+#unlink("del3m_redox.html")
+#capture.output(
+#    mitch_report(del3m, outfile="del3m_redox.html"),
+#    file = "/dev/null", append = FALSE,
+#    type = c("output", "message"), split = FALSE)
+
+```
+
+DEL5
+
+```{r,customsets_del5,fig.height=8,fig.width=8}
+
+m <- mitch_import(x=as.data.frame(del5), DEtype="deseq2",geneTable=gt)
+del5m <- mitch_calc(x=m,genesets=customsets,priority="effect",minsetsize=5)
+
+del5m$enrichment_result %>%
+  kbl() %>%
+  kable_paper("hover", full_width = F)
+
+mitch_barplot(del5m)
+vioplot(del5m$detailed_sets,horizontal=TRUE,las=1) ; grid()
+
+#unlink("del5m_redox.html")
+#capture.output(
+#    mitch_report(del5m, outfile="del5m_redox.html"),
+#    file = "/dev/null", append = FALSE,
+#    type = c("output", "message"), split = FALSE)
+
+```
+
+DER3
+
+```{r,customsets_der3,fig.height=8,fig.width=8}
+
+m <- mitch_import(x=as.data.frame(der3), DEtype="deseq2",geneTable=gt)
+der3m <- mitch_calc(x=m,genesets=customsets,priority="effect",minsetsize=5)
+
+der3m$enrichment_result %>%
+  kbl() %>%
+  kable_paper("hover", full_width = F)
+
+mitch_barplot(der3m)
+vioplot(der3m$detailed_sets,horizontal=TRUE,las=1) ; grid()
+
+unlink("der3m_redox.html")
+capture.output(
+    mitch_report(der3m, outfile="der3m_redox.html"),
+    file = "/dev/null", append = FALSE,
+    type = c("output", "message"), split = FALSE)
+
+```
+
+DER5
+
+```{r,customsets_der5,fig.height=8,fig.width=8}
+
+m <- mitch_import(x=as.data.frame(der5), DEtype="deseq2",geneTable=gt)
+der5m <- mitch_calc(x=m,genesets=customsets,priority="effect",minsetsize=5)
+
+der5m$enrichment_result %>%
+  kbl() %>%
+  kable_paper("hover", full_width = F)
+
+mitch_barplot(der5m)
+vioplot(der5m$detailed_sets,horizontal=TRUE,las=1) ; grid()
+
+unlink("der5m_redox.html")
+capture.output(
+    mitch_report(der5m, outfile="der5m_redox.html"),
+    file = "/dev/null", append = FALSE,
     type = c("output", "message"), split = FALSE)
 
 ```
