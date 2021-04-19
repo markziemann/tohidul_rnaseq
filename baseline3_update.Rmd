@@ -36,7 +36,7 @@ suppressPackageStartupMessages({
   library("eulerr")
   library("UpSetR")
   library("vioplot")
-
+  library("clusterProfiler")
 })
 
 ```
@@ -122,6 +122,7 @@ up <- rownames(subset(de, log2FoldChange>0 & padj<0.05 ))
 dn <- rownames(subset(de, log2FoldChange<0 & padj<0.05 ))
 str(up)
 str(dn)
+
 # MA plot
 sig <-subset(de, padj < 0.05 )
 GENESUP <- length(up)
@@ -129,12 +130,68 @@ GENESDN <- length(dn)
 SUBHEADER = paste(GENESUP, "up, ", GENESDN, "down")
 ns <-subset(de, padj > 0.05 )
 plot(log2(de$baseMean),de$log2FoldChange,
-     xlab="log2 basemean", ylab="log2 foldchange",
+     xlab="log2 basemean", ylab="log2(fold change)",
      pch=19, cex=0.5, col="dark gray",
+     ylim = c(-6,6),
      main="smear plot")
 points(log2(sig$baseMean),sig$log2FoldChange,
-       pch=19, cex=0.5, col="red")
+      pch=19, cex=0.5, col="red")
 mtext(SUBHEADER)
+
+# Volcano
+NLAB=12
+plot(de$log2FoldChange, -log10(de$pvalue) ,
+    xlab="-log2(fold change)", ylab="-log10(p-value)",
+    xlim = c(-6,6),
+    pch=19, cex=1, col="dark gray",
+    main="smear plot")
+    grid()
+mtext(SUBHEADER)
+points(sig$log2FoldChange, -log10(sig$pvalue) ,
+     pch=19, cex=1, col="red")
+text(head(sig$log2FoldChange,NLAB), head(-log10(sig$pvalue),NLAB)+0.5 , 
+    labels=head(rownames(sig),NLAB) , cex=1 )
+
+# organellar genomes
+chl <- de[grep("ATCG",rownames(de)),]
+mit <- de[grep("ATMG",rownames(de)),]
+NLAB=12 
+plot(de$log2FoldChange, -log10(de$pvalue) ,
+    xlab="-log2(fold change)", ylab="-log10(p-value)",
+    xlim = c(-6,6),
+    pch=19, cex=1, col="dark gray",
+    main="smear plot: organellar genomes")
+    grid()
+    abline(h=tail(-log10(sig$pvalue),1),lty=2,lwd=2)
+mtext("Grey: nuclear, Red: plastid, Blue: mito")
+points(chl$log2FoldChange, -log10(chl$pvalue) ,
+     pch=19, cex=1, col="red")
+points(mit$log2FoldChange, -log10(mit$pvalue) ,
+     pch=19, cex=1, col="blue")
+
+# summary plot
+chl_up <- nrow(subset(chl,padj<0.05 & log2FoldChange>1))
+chl_dn <- nrow(subset(chl,padj<0.05 & log2FoldChange<1))
+mit_up <- nrow(subset(mit,padj<0.05 & log2FoldChange>1))
+mit_dn <- nrow(subset(mit,padj<0.05 & log2FoldChange<1))
+sig_up <- length(up)
+sig_dn <- length(dn)
+n_up <- sig_up - ( chl_up + mit_up )
+n_dn <- sig_dn - ( chl_dn + mit_dn )
+
+# barplot
+par(mar=c(5,10,2,2))
+barplot(c("nuclear up"=sig_up,
+    "chl up"=chl_up,
+    "mit up"=mit_up,
+    "nuclear dn"=sig_dn,
+    "chl dn"=chl_dn,
+    "mit dn"=mit_dn),
+    horiz=TRUE,
+    las=1,
+    main="number of DE genes")
+par(mar=c(5.1,4.1,4.1,2.1))
+
 # heatmap
 yn <- y/colSums(y)*1000000
 yf <- yn[which(rownames(yn) %in% rownames(de)[1:50]),]
@@ -148,7 +205,6 @@ mtext("yellow=ctrl, orange=trt")
 return(de)
 }
 
-
 mitch_barplot <- function(res){
   sig <- res$enrichment_result
   sig <- head( sig[order(sig$pANOVA),] ,30)
@@ -158,7 +214,6 @@ mitch_barplot <- function(res){
 }
 
 ```
-
 
 ## Split data into contrast groups
 
@@ -187,7 +242,6 @@ write.table(de80,file="de80.tsv",quote=FALSE,sep="\t")
 de80_up <- rownames(subset(de80,padj<0.05&log2FoldChange>0))
 de80_dn <- rownames(subset(de80,padj<0.05&log2FoldChange<0))
 
-
 ```
 
 ## Pathway analysis
@@ -211,8 +265,6 @@ kbl(head(top,30)) %>% kable_styling()
 
 mitch_barplot(res_sig)
 
-
-
 # effect size
 res_eff <- mitch_calc(x=m,genesets=genesets,priority="effect")
 
@@ -223,9 +275,7 @@ mitch_barplot(res_eff)
 
 ```
 
-
 Gene sets of interest
-
 
 ```{r,genesetsofinterest, fig.height=8,fig.width=8}
 
@@ -241,10 +291,43 @@ myres <- mitch_calc(x=m,genesets=mysets,priority="effect")
 
 par(mar=c(5,20,5,2))
 vioplot(myres$detailed_sets,horizontal=TRUE,las=2,side="right",cex.axis=0.7)
+grid()
+
+```
+
+Bubble plot
+
+
+```{r,bubbleplot1}
+
+head(res_eff$enrichment_result)
 
 
 ```
 
+
+Heat map
+
+```{r,heatmaps2}
+
+x <- mysets[1]
+
+xxx <- xx[,c(grep("S80",colnames(xx)),grep("H",colnames(xx)))]
+xxx <- xxx / colSums(xxx) * 1e6
+
+colfunc <- colorRampPalette(c("blue", "white", "red"))
+
+plots <- lapply(1:length(mysets), function(x) {
+  at <- gt[which(gt$V2 %in% mysets[[x]]),1]
+  my_genes  <- xxx[which(rownames(xxx) %in% at),]
+  if(nrow(my_genes)>2) {
+    heatmap.2(as.matrix(my_genes),trace="none",scale="row",
+      margin=c(8,10),main=names(mysets[x]),
+      col=colfunc(25))
+  }
+})
+
+```
 
 ## Mitch reports
 
