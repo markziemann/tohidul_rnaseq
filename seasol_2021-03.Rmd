@@ -1,7 +1,11 @@
---- title: "Tohidul: does Seasol prime gene expression" author: "Mark Ziemann" date: "`r 
-Sys.Date()`" output:
+---
+title: "Tohidul: does Seasol prime gene expression"
+author: "Mark Ziemann"
+date: "`r Sys.Date()`"
+output:
   html_document:
     toc: true
+    toc_float: true
 theme: cosmo
 ---
 
@@ -29,6 +33,7 @@ suppressPackageStartupMessages({
   library("eulerr")
   library("UpSetR")
   library("vioplot")
+  library(ggplot2)
 })
 
 ```
@@ -185,6 +190,13 @@ mitch_barplot <- function(res){
     names.arg=sig$set,main="Enrichment score") ;grid()
 }
 
+mitch_bubbleplot <- function(res,n) {
+  top <- head(res$enrichment_result,n)
+  top <- top[order(top$s.dist),]
+  top$set <- factor(top$set, levels = top$set[order(top$s.dist)])
+  ggplot(top, aes(s.dist, set, size = setSize)) + geom_point(aes(colour=-log10(top$p.adjustANOVA)))
+}
+
 ```
 
 
@@ -329,14 +341,18 @@ First I'll strt with unidimensional analysis.
 
 ```{r,unidimensional,fig.height=8,fig.width=8}
 
-genesets <- gmt_import("../baseline/ref/Ath_AGI_LOCUS_TAIR10_Aug2012.txt.gmt")
+genesets <- gmt_import("../../ref/Ath_AGI_LOCUS_TAIR10_Aug2012.txt.gmt")
 
-gt <- read.table("../baseline/ref/Arabidopsis_thaliana.TAIR10.46.geneaccession2symbol.tsv",
+gt <- read.table("../../ref/Arabidopsis_thaliana.TAIR10.46.geneaccession2symbol.tsv",
     fill=TRUE) 
+gt$V1 <- sapply(strsplit(gt$V1,"\\."),"[[",1)
+gt <- unique(gt)
 
-m <- mitch_import(x=as.data.frame(del3), DEtype="deseq2",geneTable=gt)
+
+m <- mitch_import(x=as.data.frame(del3), DEtype="deseq2")
 del3m <- mitch_calc(x=m,genesets=genesets,priority="effect",minsetsize=5)
 mitch_barplot(del3m)
+mitch_bubbleplot(del3m,30)
 
 unlink("del3m_mitch.html")
 capture.output(
@@ -344,9 +360,10 @@ capture.output(
     file = "/dev/null", append = FALSE,
     type = c("output", "message"), split = FALSE)
 
-m <- mitch_import(x=as.data.frame(del5),DEtype="deseq2",geneTable=gt)
+m <- mitch_import(x=as.data.frame(del5),DEtype="deseq2")
 del5m <- mitch_calc(x=m,genesets=genesets,priority="effect",minsetsize=5)
 mitch_barplot(del5m)
+mitch_bubbleplot(del5m,30)
 
 unlink("del5m_mitch.html")
 capture.output(
@@ -354,9 +371,10 @@ capture.output(
     file = "/dev/null", append = FALSE,
     type = c("output", "message"), split = FALSE)
 
-m <- mitch_import(x=as.data.frame(der3),DEtype="deseq2",geneTable=gt)
+m <- mitch_import(x=as.data.frame(der3),DEtype="deseq2")
 der3m <- mitch_calc(x=m,genesets=genesets,priority="effect",minsetsize=5)
 mitch_barplot(der3m)
+mitch_bubbleplot(der3m,30)
 
 unlink("der3m_mitch.html")
 capture.output(
@@ -364,9 +382,10 @@ capture.output(
     file = "/dev/null", append = FALSE,
     type = c("output", "message"), split = FALSE)
 
-m <- mitch_import(x=as.data.frame(der5),DEtype="deseq2",geneTable=gt)
+m <- mitch_import(x=as.data.frame(der5),DEtype="deseq2")
 der5m <- mitch_calc(x=m,genesets=genesets,priority="effect",minsetsize=5)
 mitch_barplot(der5m)
+mitch_bubbleplot(der5m,30)
 
 unlink("der5m_mitch.html")
 capture.output(
@@ -383,7 +402,7 @@ Next, multidimensional analysis.
 l <- list("del3"=del3,"del5"=del5,
   "der3"=der3, "der5"=der5)
 
-m <- mitch_import(x=l,DEtype="deseq2",geneTable=gt)
+m <- mitch_import(x=l,DEtype="deseq2")
 
 # effect size
 res <- mitch_calc(x=m,genesets=genesets,priority="effect",minsetsize=5)
@@ -413,14 +432,14 @@ DEL3 contrast
 
 ```{r,customsets_del3,fig.height=8,fig.width=8}
 
-customsets <- c("MISC_GLUTATHIONE_S_TRANSFERASES",
-  "MISC_PEROXIDASES",
-  "REDOX_DISMUTASES_AND_CATALASES",
-  "REDOX_GLUTAREDOXINS")
+customsets <- c("redox.ascorbate.and.glutathione.ascorbate",
+  "misc.peroxidases",
+  "redox.dismutases.and.catalases",
+  "redox.glutaredoxins")
 
 customsets <- genesets[which(names(genesets) %in% customsets)]
 
-m <- mitch_import(x=as.data.frame(del3), DEtype="deseq2",geneTable=gt)
+m <- mitch_import(x=as.data.frame(del3), DEtype="deseq2")
 del3m <- mitch_calc(x=m,genesets=customsets,priority="effect",minsetsize=5)
 
 del3m$enrichment_result %>%
@@ -429,6 +448,7 @@ del3m$enrichment_result %>%
 
 mitch_barplot(del3m)
 vioplot(del3m$detailed_sets,horizontal=TRUE,las=1) ; grid()
+mitch_bubbleplot(del3m,30)
 
 #unlink("del3m_redox.html")
 #capture.output(
@@ -442,7 +462,7 @@ DEL5
 
 ```{r,customsets_del5,fig.height=8,fig.width=8}
 
-m <- mitch_import(x=as.data.frame(del5), DEtype="deseq2",geneTable=gt)
+m <- mitch_import(x=as.data.frame(del5), DEtype="deseq2",geneTable)
 del5m <- mitch_calc(x=m,genesets=customsets,priority="effect",minsetsize=5)
 
 del5m$enrichment_result %>%
@@ -451,6 +471,7 @@ del5m$enrichment_result %>%
 
 mitch_barplot(del5m)
 vioplot(del5m$detailed_sets,horizontal=TRUE,las=1) ; grid()
+mitch_bubbleplot(del5m,30)
 
 #unlink("del5m_redox.html")
 #capture.output(
@@ -464,7 +485,7 @@ DER3
 
 ```{r,customsets_der3,fig.height=8,fig.width=8}
 
-m <- mitch_import(x=as.data.frame(der3), DEtype="deseq2",geneTable=gt)
+m <- mitch_import(x=as.data.frame(der3), DEtype="deseq2")
 der3m <- mitch_calc(x=m,genesets=customsets,priority="effect",minsetsize=5)
 
 der3m$enrichment_result %>%
@@ -473,6 +494,7 @@ der3m$enrichment_result %>%
 
 mitch_barplot(der3m)
 vioplot(der3m$detailed_sets,horizontal=TRUE,las=1) ; grid()
+mitch_bubbleplot(der3m,30)
 
 unlink("der3m_redox.html")
 capture.output(
@@ -486,7 +508,7 @@ DER5
 
 ```{r,customsets_der5,fig.height=8,fig.width=8}
 
-m <- mitch_import(x=as.data.frame(der5), DEtype="deseq2",geneTable=gt)
+m <- mitch_import(x=as.data.frame(der5), DEtype="deseq2")
 der5m <- mitch_calc(x=m,genesets=customsets,priority="effect",minsetsize=5)
 
 der5m$enrichment_result %>%
@@ -495,6 +517,7 @@ der5m$enrichment_result %>%
 
 mitch_barplot(der5m)
 vioplot(der5m$detailed_sets,horizontal=TRUE,las=1) ; grid()
+mitch_bubbleplot(der5m,30)
 
 unlink("der5m_redox.html")
 capture.output(
